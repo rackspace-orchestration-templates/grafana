@@ -1,0 +1,302 @@
+
+# Usage:
+# heat -v stack-create $YOUR_STACK_NAME \
+# --template-file /path/to/grafana.template \
+# -P rax_tenant=$RAX_TENANT_ID \
+# -P rax_username=$RAX_USER_NAME \
+# -P rax_apikey=$RAX_API_KEY
+# -P host_name=$WHAT_YOU_WANT_TO_CALL_IT
+#
+# What to expect:
+# A Cloud Server with a self-contained Grafana installation that serves metrics
+# from the Rackspace Cloud Metrics API. A default dashboard will be configured
+# to serve metrics from the server you spin up.
+#
+# Grafana will be protected with basic authentication, user=grafana, pass=$RANDOM_TEXT.
+#
+# You may need to request that the Cloud Metrics API endpoints be added to your
+# tenant. Contact support@rackspace.com for that.
+
+heat_template_version: 2013-05-23
+
+description: >
+  Puts together a server that will run Grafana using Cloud Metrics data.
+
+parameter_groups:
+  - label: 'Server Settings'
+    parameters:
+      - flavor
+      - image
+      - host_name
+      - es_version
+      - gr_version
+      - rax_tenant
+      - rax_username
+      - rax_apikey
+  - label: 'Apache Settings'
+    parameters:
+      - apache_auth_user
+
+parameters:
+  image:
+    default: 'Ubuntu 14.04 LTS (Trusty Tahr)'
+    label: 'Operating System'
+    type: string
+    description: 'Server image that will be used'
+    constraints:
+      - description: 'supported os versions'
+        allowed_values:
+          - 'Ubuntu 14.04 LTS (Trusty Tahr)'
+  flavor:
+    default: '2GB Standard Instance'
+    label: 'Server Size'
+    type: string
+    description: 'Cloud Server flavor (size) to use'
+    constraints:
+      - description: 'supported server sizes. should have at least 2G RAM'
+        allowed_values:
+          - '2 GB Performance'
+          - '4 GB Performance'
+          - '8 GB Performance'
+          - '15 GB Performance'
+          - '30 GB Performance'
+          - '2GB Standard Instance'
+          - '4GB Standard Instance'
+          - '8GB Standard Instance'
+          - '15GB Standard Instance'
+          - '30GB Standard Instance'
+  host_name:
+    default: grafana
+    type: string
+    description: 'Server hostname'
+    label: 'Server hostname'
+  apache_auth_user:
+    default: grafana
+    type: string
+    description: 'User name used to authenticate into Apache (which serves Grafana).'
+    label: 'Username'
+  es_version:
+    default: '1.3.4'
+    type: string
+    description: 'Elasticsearch version'
+    label: 'Elasticsearch version'
+  gr_version:
+    default: '1.8.1'
+    type: string
+    description: 'Grafana version'
+    label: 'Grafana version'
+  rax_tenant:
+    default: 'notavalidtenantdkw93ddkwl'
+    type: string
+    description: 'Rackspace tenant ID'
+    label: 'tenant ID'
+  rax_username:
+    default: 'notavaliduserskldk2e'
+    type: string
+    description: 'Rackspace user name'
+    label: 'username'
+  rax_apikey:
+    default: 'notavalidapikeykslkdjlkj2'
+    type: string
+    description: 'Rackspace account API key'
+    label: 'API key'
+
+outputs:
+  private_key:
+    description: 'SSH private key'
+    value: { get_attr: [ssh_key, private_key ] }
+  apache_auth_user:
+    description: 'Grafana auth user.'
+    value:
+      get_param: apache_auth_user
+  apache_auth_password:
+    description: 'Grafana auth password.'
+    value: { get_attr: [apache_auth_password, value ] }
+  public_ip:
+    description: IP Address
+    value: { get_attr: [cloud_server, accessIPv4] }
+
+resources:
+  cloud_server:
+    type: 'Rackspace::Cloud::Server'
+    depends_on: [ apache_auth_password ]
+    properties:
+      key_name: { get_resource: ssh_key }
+      flavor: { get_param: flavor }
+      name: { get_param: [host_name, value] }
+      image: { get_param: image }
+      user_data_format: RAW
+      config_drive: true
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -x
+            exec 2>&1
+            exec 1>/tmp/bash-debug.log
+            ps auxwwef
+            sleep 120
+            echo after sleep
+            ps auxwwef
+            rm -f /var/lib/dpkg/lock
+            export DEBIAN_FRONTEND=noninteractive
+            echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections
+            echo debconf shared/accepted-oracle-license-v1-1 seen true | debconf-set-selections
+            add-apt-repository -y ppa:webupd8team/java
+            apt-get update -y --force-yes
+            sleep 5
+            echo installing packages now, one at a time.
+            for i in wget oracle-java7-installer vim git nginx nginx-extras apache2-utils python-dev python-setuptools python-pip build-essential libcairo2-dev libffi-dev python-virtualenv python-dateutil ; do
+              echo installing "$i"
+              apt-get install -y $i --force-yes 2>&1 | tee /tmp/$i.install.log
+            done
+            curl -o /tmp/elasticsearch-es_version.deb https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-es_version.deb
+            dpkg -i /tmp/elasticsearch-es_version.deb
+            update-rc.d elasticsearch defaults 95 10
+            mv /etc/elasticsearch/elasticsearch.yml /etc/elasticsearch/elasticsearch-default.yml
+            echo cluster.name: es_grafana > /etc/elasticsearch/elasticsearch.yml
+            echo network.host: 127.0.0.1 >> /etc/elasticsearch/elasticsearch.yml
+            /etc/init.d/elasticsearch start
+            htpasswd -b -c /etc/nginx/.htpasswd apache_auth_user apache_auth_password
+            curl -o /tmp/grafana-gr_version.tar.gz http://grafanarel.s3.amazonaws.com/grafana-gr_version.tar.gz
+            tar -xzf /tmp/grafana-gr_version.tar.gz -C /usr/share/nginx/
+            ln -s /usr/share/nginx/grafana-gr_version /usr/share/nginx/grafana
+            chown -R root:root /usr/share/nginx/grafana-gr_version
+            rm /etc/nginx/sites-enabled/default
+            cat > /etc/nginx/sites-available/grafana << EOL
+            upstream graphite {
+              server 127.0.0.1:8888;
+            }
+            upstream elasticsearch {
+              server 127.0.0.1:9200;
+            }
+            server {
+              listen 80;
+              auth_basic 'Restricted';
+              auth_basic_user_file /etc/nginx/.htpasswd;
+              location /graphite/ {
+                rewrite /graphite/(.*) /\$1 break;
+                proxy_pass http://graphite;
+                proxy_redirect off;
+                proxy_set_header Host \$host;
+              }
+              location /elasticsearch/ {
+                rewrite /elasticsearch/(.*) /\$1 break;
+                proxy_pass http://elasticsearch;
+                proxy_redirect off;
+                proxy_set_header Host \$host;
+              }
+              location / {
+                root /usr/share/nginx/grafana;
+              }
+            }
+            EOL
+            ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
+            /etc/init.d/nginx restart
+            pip install graphite-api gunicorn
+            git -C /tmp clone https://github.com/gdusbabek/blueflood.git
+            git -C /tmp/blueflood checkout graphite_compat
+            cd /tmp/blueflood/contrib/graphite
+            python setup.py install
+            cat > /etc/graphite-api.yaml << EOL
+            search_index: /dev/null
+            finders:
+              - blueflood.TenantBluefloodFinder
+            functions:
+              - graphite_api.functions.SeriesFunctions
+              - graphite_api.functions.PieFunctions
+            time_zone: UTC
+            blueflood:
+              tenant: rax_tenant
+              username: rax_username
+              apikey: rax_apikey
+              urls:
+                - http://iad.metrics.api.rackspacecloud.com
+            EOL
+            cat > /usr/share/nginx/grafana/config.js << EOL
+            define(['settings'],
+            function (Settings) {
+              return new Settings({
+                datasources: {
+                  graphite: {
+                    type: 'graphite',
+                    url: 'http://'+window.location.hostname+'/graphite',
+                  },
+                  elasticsearch: {
+                    type: 'elasticsearch',
+                    url: 'http://'+window.location.hostname+'/elasticsearch',
+                    index: 'grafana-dash',
+                    grafanaDB: true,
+                  }
+                },
+                search: {
+                  max_results: 20
+                },
+                default_route: '/dashboard/file/default.json',
+                unsaved_changes_warning: true,
+                playlist_timespan: '1m',
+                admin: {
+                  password: ''
+                },
+                plugins: {
+                  panels: []
+                }
+              });
+            });
+            EOL
+            echo rax_tenant > ~/tenant_id
+            cat > /etc/init/graphite-api.conf << EOL
+            description "Graphite-API server"
+            start on runlevel [2345]
+            stop on runlevel [!2345]
+            console log
+            respawn
+            exec gunicorn -b 127.0.0.1:8888 -w 4 graphite_api.app:app
+            EOL
+            cat > /root/.raxrc << EOL
+            [credentials]
+            username=rax_username
+            api_key=rax_apikey
+            [api]
+            url=https://monitoring.api.rackspacecloud.com/v1.0
+            EOL
+            start graphite-api
+            wget http://meta.packages.cloudmonitoring.rackspace.com/ubuntu-14.04-x86_64/rackspace-cloud-monitoring-meta-stable_1.0_all.deb
+            dpkg -i rackspace-cloud-monitoring-meta-stable_1.0_all.deb
+            apt-get update
+            apt-get install rackspace-monitoring-agent
+            pip install rackspace-monitoring-cli
+            service rackspace-monitoring-agent stop
+            echo "iid-datasource-none" > /var/lib/cloud/data/instance-id
+            rackspace-monitoring-agent --setup --username rax_username --apikey rax_apikey --production
+            service rackspace-monitoring-agent start
+            raxmon-entities-list > /tmp/all_entities.txt
+            sed -i -e "s/cloud_server/cloud-server/g" /tmp/all_entities.txt
+            cat /tmp/all_entities.txt | grep `cat /var/lib/cloud/data/previous-hostname` | grep -oEi '(en[0-9a-zA-Z]{8,8})' > /root/entity_id
+            raxmon-checks-create --type agent.cpu --label cpu --entity-id `cat /root/entity_id` --details="grafana" --target-alias `ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/cpu_check_id
+            raxmon-checks-create --type agent.memory --label memory --entity-id `cat /root/entity_id` --details="grafana" --target-alias `ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/memory_check_id
+            raxmon-checks-create --type agent.disk --label disk --entity-id `cat /root/entity_id` --details="target=/dev/xda1" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/disk_check_id
+            raxmon-checks-create --type agent.network --label network --entity-id `cat /root/entity_id` --details="target=eth0" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/network_check_id
+            curl https://gist.githubusercontent.com/gdusbabek/c3feab2849f9583797b4/raw/cf46c35a9cef5190edef0c54c8a1e9b7808172a3/cloud_metrics_default_dashboard.json > /tmp/dashboard.json
+            sed -i -e "s/_rax_entity_id_/`cat /root/entity_id`/g" /tmp/dashboard.json
+            mv /usr/share/nginx/grafana/app/dashboards/default.json /usr/share/nginx/grafana/app/dashboards/old_default.json
+            cp /tmp/dashboard.json /usr/share/nginx/grafana/app/dashboards/default.json
+
+          params:
+            es_version: { get_param: es_version }
+            gr_version: { get_param: gr_version }
+            apache_auth_user: { get_param: apache_auth_user }
+            apache_auth_password: { get_attr: [apache_auth_password, value ] }
+            rax_tenant: { get_param: rax_tenant }
+            rax_username: { get_param: rax_username }
+            rax_apikey: { get_param: rax_apikey }
+  ssh_key:
+    type: 'OS::Nova::KeyPair'
+    properties:
+      name:
+        get_param: 'OS::stack_id'
+      save_private_key: true
+  apache_auth_password:
+    type: 'OS::Heat::RandomString'
+    properties:
+      length: 16
+      sequence: lettersdigits
