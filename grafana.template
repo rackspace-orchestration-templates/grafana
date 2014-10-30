@@ -193,7 +193,7 @@ resources:
             ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
             /etc/init.d/nginx restart
             pip install graphite-api gunicorn
-            git -C /tmp clone https://github.com/gdusbabek/blueflood.git
+            git -C /tmp clone https://github.com/rackerlabs/blueflood.git
             git -C /tmp/blueflood checkout graphite_compat
             cd /tmp/blueflood/contrib/graphite
             python setup.py install
@@ -209,6 +209,8 @@ resources:
               tenant: rax_tenant
               username: rax_username
               apikey: rax_apikey
+              authentication_module: rax_auth
+              authentication_class: BluefloodAuth
               urls:
                 - http://iad.metrics.api.rackspacecloud.com
             EOL
