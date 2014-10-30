@@ -194,7 +194,7 @@ resources:
             /etc/init.d/nginx restart
             pip install graphite-api gunicorn
             git -C /tmp clone https://github.com/rackerlabs/blueflood.git
-            git -C /tmp/blueflood checkout graphite_compat
+            git -C /tmp/blueflood checkout master
             cd /tmp/blueflood/contrib/graphite
             python setup.py install
             cat > /etc/graphite-api.yaml << EOL
