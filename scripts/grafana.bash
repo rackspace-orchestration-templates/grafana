@@ -77,10 +77,10 @@ ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
 
 # install graphite-api
 pip install graphite-api gunicorn
-git -C /tmp clone https://github.com/gdusbabek/blueflood.git
+git -C /tmp clone https://github.com/rackerlabs/blueflood.git
 
 # install the Cloud Metrics graphite finder
-git -C /tmp/blueflood checkout graphite_compat
+git -C /tmp/blueflood checkout master
 cd /tmp/blueflood/contrib/graphite
 python setup.py install
 
