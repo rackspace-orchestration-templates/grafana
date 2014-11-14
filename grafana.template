@@ -278,7 +278,7 @@ resources:
             raxmon-checks-create --type agent.memory --label memory --entity-id `cat /root/entity_id` --details="grafana" --target-alias `ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/memory_check_id
             raxmon-checks-create --type agent.disk --label disk --entity-id `cat /root/entity_id` --details="target=/dev/xda1" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/disk_check_id
             raxmon-checks-create --type agent.network --label network --entity-id `cat /root/entity_id` --details="target=eth0" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/network_check_id
-            curl https://gist.githubusercontent.com/gdusbabek/c3feab2849f9583797b4/raw/cf46c35a9cef5190edef0c54c8a1e9b7808172a3/cloud_metrics_default_dashboard.json > /tmp/dashboard.json
+            curl http://bit.ly/default-grafana > /tmp/dashboard.json
             sed -i -e "s/_rax_entity_id_/`cat /root/entity_id`/g" /tmp/dashboard.json
             mv /usr/share/nginx/grafana/app/dashboards/default.json /usr/share/nginx/grafana/app/dashboards/old_default.json
             cp /tmp/dashboard.json /usr/share/nginx/grafana/app/dashboards/default.json
