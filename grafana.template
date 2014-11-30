@@ -193,8 +193,8 @@ resources:
             ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
             /etc/init.d/nginx restart
             pip install graphite-api gunicorn
-            git -C /tmp clone https://github.com/gdusbabek/blueflood.git
-            git -C /tmp/blueflood checkout graphite_compat
+            git -C /tmp clone https://github.com/rackerlabs/blueflood.git
+            git -C /tmp/blueflood checkout master
             cd /tmp/blueflood/contrib/graphite
             python setup.py install
             cat > /etc/graphite-api.yaml << EOL
@@ -209,6 +209,8 @@ resources:
               tenant: rax_tenant
               username: rax_username
               apikey: rax_apikey
+              authentication_module: rax_auth
+              authentication_class: BluefloodAuth
               urls:
                 - http://iad.metrics.api.rackspacecloud.com
             EOL
@@ -276,7 +278,7 @@ resources:
             raxmon-checks-create --type agent.memory --label memory --entity-id `cat /root/entity_id` --details="grafana" --target-alias `ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/memory_check_id
             raxmon-checks-create --type agent.disk --label disk --entity-id `cat /root/entity_id` --details="target=/dev/xda1" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/disk_check_id
             raxmon-checks-create --type agent.network --label network --entity-id `cat /root/entity_id` --details="target=eth0" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/network_check_id
-            curl https://gist.githubusercontent.com/gdusbabek/c3feab2849f9583797b4/raw/cf46c35a9cef5190edef0c54c8a1e9b7808172a3/cloud_metrics_default_dashboard.json > /tmp/dashboard.json
+            curl -L http://bit.ly/default-grafana > /tmp/dashboard.json
             sed -i -e "s/_rax_entity_id_/`cat /root/entity_id`/g" /tmp/dashboard.json
             mv /usr/share/nginx/grafana/app/dashboards/default.json /usr/share/nginx/grafana/app/dashboards/old_default.json
             cp /tmp/dashboard.json /usr/share/nginx/grafana/app/dashboards/default.json
