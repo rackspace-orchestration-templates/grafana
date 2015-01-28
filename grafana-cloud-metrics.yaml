@@ -39,14 +39,14 @@ parameter_groups:
 
 parameters:
   image:
-    default: 'Ubuntu 14.04 LTS (Trusty Tahr)'
+    default: 'Ubuntu 14.04 LTS (Trusty Tahr) (PV)'
     label: 'Operating System'
     type: string
     description: 'Server image that will be used'
     constraints:
       - description: 'supported os versions'
         allowed_values:
-          - 'Ubuntu 14.04 LTS (Trusty Tahr)'
+          - 'Ubuntu 14.04 LTS (Trusty Tahr) (PV)'
   flavor:
     default: '2GB Standard Instance'
     label: 'Server Size'
