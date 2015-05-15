@@ -192,7 +192,8 @@ resources:
             EOL
             ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
             /etc/init.d/nginx restart
-            pip install graphite-api gunicorn
+            pip install gunicorn
+            pip install --upgrade "git+http://github.com/rackerlabs/graphite-api.git@george/fetch_multi_with_patches"
             git -C /tmp clone https://github.com/rackerlabs/blueflood.git
             git -C /tmp/blueflood checkout master
             cd /tmp/blueflood/contrib/graphite
@@ -252,7 +253,7 @@ resources:
             stop on runlevel [!2345]
             console log
             respawn
-            exec gunicorn -b 127.0.0.1:8888 -w 4 graphite_api.app:app
+            exec gunicorn -b 127.0.0.1:8888 -w 8 graphite_api.app:app
             EOL
             cat > /root/.raxrc << EOL
             [credentials]
