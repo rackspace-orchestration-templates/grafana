@@ -215,6 +215,9 @@ resources:
               urls:
                 - http://iad.metrics.api.rackspacecloud.com
             EOL
+            cd /usr/share/nginx/grafana/plugins
+            mkdir datasource
+            cp -r /tmp/blueflood/contrib/garafana/grafana_1.x/blueflood ./datasource
             cat > /usr/share/nginx/grafana/config.js << EOL
             define(['settings'],
             function (Settings) {
@@ -229,6 +232,13 @@ resources:
                     url: 'http://'+window.location.hostname+'/elasticsearch',
                     index: 'grafana-dash',
                     grafanaDB: true,
+                  },
+                  blueflood: {
+                    type: 'BluefloodDatasource',
+                    url: 'http://iad.metrics.api.rackspacecloud.com',
+                    username: 'rax_username',
+                    apikey: 'rax_apikey',
+                    tenantID: 'rax_tenant'
                   }
                 },
                 search: {
@@ -241,7 +251,8 @@ resources:
                   password: ''
                 },
                 plugins: {
-                  panels: []
+                  panels: [],
+                  dependencies: ['datasource/blueflood/datasource']
                 }
               });
             });
