@@ -117,6 +117,16 @@ outputs:
     value: { get_attr: [cloud_server, accessIPv4] }
 
 resources:
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 600
+
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
   cloud_server:
     type: 'Rackspace::Cloud::Server'
     depends_on: [ apache_auth_password ]
@@ -297,6 +307,7 @@ resources:
             sed -i -e "s/_rax_entity_id_/`cat /root/entity_id`/g" /tmp/dashboard.json
             mv /usr/share/nginx/grafana/app/dashboards/default.json /usr/share/nginx/grafana/app/dashboards/old_default.json
             cp /tmp/dashboard.json /usr/share/nginx/grafana/app/dashboards/default.json
+            wc_notify --data-binary '{"status": "SUCCESS"}'
 
           params:
             es_version: { get_param: es_version }
@@ -306,6 +317,7 @@ resources:
             rax_tenant: { get_param: rax_tenant }
             rax_username: { get_param: rax_username }
             rax_apikey: { get_param: rax_apikey }
+            wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
   ssh_key:
     type: 'OS::Nova::KeyPair'
     properties:
