@@ -162,6 +162,9 @@ resources:
             ln -s /usr/share/nginx/grafana-gr_version /usr/share/nginx/grafana
             chown -R root:root /usr/share/nginx/grafana-gr_version
             rm /etc/nginx/sites-enabled/default
+
+            export heat_one_parameter='$1'
+            export heat_host_parameter='$host'
             cat > /etc/nginx/sites-available/grafana << EOL
             upstream graphite {
               server 127.0.0.1:8888;
@@ -174,16 +177,16 @@ resources:
               auth_basic 'Restricted';
               auth_basic_user_file /etc/nginx/.htpasswd;
               location /graphite/ {
-                rewrite /graphite/(.*) /\$1 break;
+                rewrite /graphite/(.*) /$heat_one_parameter break;
                 proxy_pass http://graphite;
                 proxy_redirect off;
-                proxy_set_header Host \$host;
+                proxy_set_header Host $heat_host_parameter;
               }
               location /elasticsearch/ {
-                rewrite /elasticsearch/(.*) /\$1 break;
+                rewrite /elasticsearch/(.*) /$heat_one_parameter break;
                 proxy_pass http://elasticsearch;
                 proxy_redirect off;
-                proxy_set_header Host \$host;
+                proxy_set_header Host $heat_host_parameter;
               }
               location / {
                 root /usr/share/nginx/grafana;
