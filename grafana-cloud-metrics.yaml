@@ -118,14 +118,15 @@ outputs:
 
 resources:
   wait_condition:
-    type: OS::Heat::WaitCondition
+    type: "OS::Heat::SwiftSignal"
     properties:
       handle: { get_resource: wait_handle }
       count: 1
       timeout: 1800
 
   wait_handle:
-    type: OS::Heat::WaitConditionHandle
+    type: "OS::Heat::SwiftSignalHandle"
+
 
   cloud_server:
     type: 'Rackspace::Cloud::Server'
