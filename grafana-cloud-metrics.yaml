@@ -117,6 +117,17 @@ outputs:
     value: { get_attr: [cloud_server, accessIPv4] }
 
 resources:
+  wait_condition:
+    type: "OS::Heat::SwiftSignal"
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 1800
+
+  wait_handle:
+    type: "OS::Heat::SwiftSignalHandle"
+
+
   cloud_server:
     type: 'Rackspace::Cloud::Server'
     depends_on: [ apache_auth_password ]
@@ -162,6 +173,9 @@ resources:
             ln -s /usr/share/nginx/grafana-gr_version /usr/share/nginx/grafana
             chown -R root:root /usr/share/nginx/grafana-gr_version
             rm /etc/nginx/sites-enabled/default
+
+            export heat_one_parameter='$1'
+            export heat_host_parameter='$host'
             cat > /etc/nginx/sites-available/grafana << EOL
             upstream graphite {
               server 127.0.0.1:8888;
@@ -174,16 +188,16 @@ resources:
               auth_basic 'Restricted';
               auth_basic_user_file /etc/nginx/.htpasswd;
               location /graphite/ {
-                rewrite /graphite/(.*) /\$1 break;
+                rewrite /graphite/(.*) /$heat_one_parameter break;
                 proxy_pass http://graphite;
                 proxy_redirect off;
-                proxy_set_header Host \$host;
+                proxy_set_header Host $heat_host_parameter;
               }
               location /elasticsearch/ {
-                rewrite /elasticsearch/(.*) /\$1 break;
+                rewrite /elasticsearch/(.*) /$heat_one_parameter break;
                 proxy_pass http://elasticsearch;
                 proxy_redirect off;
-                proxy_set_header Host \$host;
+                proxy_set_header Host $heat_host_parameter;
               }
               location / {
                 root /usr/share/nginx/grafana;
@@ -294,6 +308,7 @@ resources:
             sed -i -e "s/_rax_entity_id_/`cat /root/entity_id`/g" /tmp/dashboard.json
             mv /usr/share/nginx/grafana/app/dashboards/default.json /usr/share/nginx/grafana/app/dashboards/old_default.json
             cp /tmp/dashboard.json /usr/share/nginx/grafana/app/dashboards/default.json
+            wc_notify --data-binary '{"status": "SUCCESS"}'
 
           params:
             es_version: { get_param: es_version }
@@ -303,6 +318,7 @@ resources:
             rax_tenant: { get_param: rax_tenant }
             rax_username: { get_param: rax_username }
             rax_apikey: { get_param: rax_apikey }
+            wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
   ssh_key:
     type: 'OS::Nova::KeyPair'
     properties:
