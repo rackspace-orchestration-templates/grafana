@@ -265,7 +265,7 @@
           },
           "targets": [
             {
-              "target": "rackspace.monitoring.entities.*.checks.agent.network.*.rx_bytes"
+              "target": "derivative(rackspace.monitoring.entities.*.checks.agent.network.*.rx_bytes)"
             }
           ],
           "aliasColors": {},
@@ -327,7 +327,7 @@
           },
           "targets": [
             {
-              "target": "rackspace.monitoring.entities.*.checks.agent.network.*.tx_bytes"
+              "target": "derivative(rackspace.monitoring.entities.*.checks.agent.network.*.tx_bytes)"
             }
           ],
           "aliasColors": {},
@@ -381,6 +381,6 @@
     "list": [],
     "enable": false
   },
-  "refresh": "5s",
+  "refresh": "10s",
   "version": 6
 }
