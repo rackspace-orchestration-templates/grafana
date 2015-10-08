@@ -118,14 +118,14 @@ outputs:
 
 resources:
   wait_condition:
-    type: "AWS::CloudFormation::WaitCondition"
+    type: "OS::Heat::SwiftSignal"
     properties:
-      Handle: { get_resource: wait_handle }
-      Count: 1
-      Timeout: 1800
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 1800
 
   wait_handle:
-    type: "AWS::CloudFormation::WaitConditionHandle"
+    type: "OS::Heat::SwiftSignalHandle"
 
 
   cloud_server:
