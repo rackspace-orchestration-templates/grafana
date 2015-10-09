@@ -288,26 +288,6 @@ resources:
             url=https://monitoring.api.rackspacecloud.com/v1.0
             EOL
             start graphite-api
-            wget http://meta.packages.cloudmonitoring.rackspace.com/ubuntu-14.04-x86_64/rackspace-cloud-monitoring-meta-stable_1.0_all.deb
-            dpkg -i rackspace-cloud-monitoring-meta-stable_1.0_all.deb
-            apt-get update
-            apt-get install rackspace-monitoring-agent
-            pip install rackspace-monitoring-cli
-            service rackspace-monitoring-agent stop
-            echo "iid-datasource-none" > /var/lib/cloud/data/instance-id
-            rackspace-monitoring-agent --setup --username rax_username --apikey rax_apikey --production
-            service rackspace-monitoring-agent start
-            raxmon-entities-list > /tmp/all_entities.txt
-            sed -i -e "s/cloud_server/cloud-server/g" /tmp/all_entities.txt
-            cat /tmp/all_entities.txt | grep `cat /var/lib/cloud/data/previous-hostname` | grep -oEi '(en[0-9a-zA-Z]{8,8})' > /root/entity_id
-            raxmon-checks-create --type agent.cpu --label cpu --entity-id `cat /root/entity_id` --details="grafana" --target-alias `ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/cpu_check_id
-            raxmon-checks-create --type agent.memory --label memory --entity-id `cat /root/entity_id` --details="grafana" --target-alias `ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/memory_check_id
-            raxmon-checks-create --type agent.disk --label disk --entity-id `cat /root/entity_id` --details="target=/dev/xda1" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/disk_check_id
-            raxmon-checks-create --type agent.network --label network --entity-id `cat /root/entity_id` --details="target=eth0" | grep -oEi '(ch[0-9a-zA-Z]{8,8})' > /root/network_check_id
-            curl -L http://bit.ly/default-grafana > /tmp/dashboard.json
-            sed -i -e "s/_rax_entity_id_/`cat /root/entity_id`/g" /tmp/dashboard.json
-            mv /usr/share/nginx/grafana/app/dashboards/default.json /usr/share/nginx/grafana/app/dashboards/old_default.json
-            cp /tmp/dashboard.json /usr/share/nginx/grafana/app/dashboards/default.json
             wc_notify --data-binary '{"status": "SUCCESS"}'
 
           params:
