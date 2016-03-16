@@ -208,14 +208,11 @@ resources:
             /etc/init.d/nginx restart
             pip install gunicorn
             pip install --upgrade "git+http://github.com/rackerlabs/graphite-api.git@george/fetch_multi_with_patches"
-            git -C /tmp clone https://github.com/rackerlabs/blueflood.git
-            git -C /tmp/blueflood checkout master
-            cd /tmp/blueflood/contrib/graphite
-            python setup.py install
+            pip install --upgrade blueflood-graphite-finder
             cat > /etc/graphite-api.yaml << EOL
             search_index: /dev/null
             finders:
-              - blueflood.TenantBluefloodFinder
+              - blueflood_graphite_finder.blueflood.TenantBluefloodFinder
             functions:
               - graphite_api.functions.SeriesFunctions
               - graphite_api.functions.PieFunctions
@@ -224,11 +221,36 @@ resources:
               tenant: rax_tenant
               username: rax_username
               apikey: rax_apikey
-              authentication_module: rax_auth
+              authentication_module: blueflood_graphite_finder.rax_auth
               authentication_class: BluefloodAuth
               urls:
                 - http://iad.metrics.api.rackspacecloud.com
+            logging:
+              version: 1
+              disable_existing_loggers: true
+              handlers:
+                file:
+                  class: logging.FileHandler
+                  filename: /var/log/graphite-api.log
+              loggers:
+                graphite_api:
+                  handlers:
+                    - file
+                  propagate: true
+                  level: INFO
+                blueflood_finder:
+                  handlers:
+                    - file
+                  propagate: true
+                  level: INFO
+                root:
+                  handlers:
+                    - file
+                  propagate: true
+                  level: INFO
             EOL
+            git -C /tmp clone https://github.com/rackerlabs/blueflood.git
+            git -C /tmp/blueflood checkout master
             cd /usr/share/nginx/grafana/plugins
             mkdir datasource
             cp -r /tmp/blueflood/contrib/grafana/grafana_1.x/blueflood ./datasource
