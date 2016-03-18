@@ -230,8 +230,10 @@ resources:
               disable_existing_loggers: true
               handlers:
                 file:
-                  class: logging.FileHandler
+                  class: logging.handlers.RotatingFileHandler
                   filename: /var/log/graphite-api.log
+                  backupCount: 2
+                  maxBytes: 536870912
               loggers:
                 graphite_api:
                   handlers:
