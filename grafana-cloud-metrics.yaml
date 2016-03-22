@@ -227,29 +227,23 @@ resources:
                 - http://iad.metrics.api.rackspacecloud.com
             logging:
               version: 1
-              disable_existing_loggers: true
               handlers:
-                file:
+                blueflood_finder_loghandler:
                   class: logging.handlers.RotatingFileHandler
-                  filename: /var/log/graphite-api.log
+                  filename: /var/log/blueflood-graphite-finder.log
+                  formatter: default
                   backupCount: 2
                   maxBytes: 536870912
               loggers:
-                graphite_api:
-                  handlers:
-                    - file
-                  propagate: true
-                  level: INFO
                 blueflood_finder:
                   handlers:
-                    - file
+                    - blueflood_finder_loghandler
                   propagate: true
                   level: INFO
-                root:
-                  handlers:
-                    - file
-                  propagate: true
-                  level: INFO
+              formatters:
+                default:
+                  format: '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
+                  datefmt: '%Y-%m-%d %H:%M:%S'
             EOL
             git -C /tmp clone https://github.com/rackerlabs/blueflood.git
             git -C /tmp/blueflood checkout master
