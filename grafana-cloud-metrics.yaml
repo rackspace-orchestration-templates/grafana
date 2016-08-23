@@ -39,14 +39,14 @@ parameter_groups:
 
 parameters:
   image:
-    default: 'Ubuntu 14.04 LTS (Trusty Tahr) (PV)'
+    default: 'Ubuntu 14.04 LTS (Trusty Tahr) (PVHVM) (Orchestration)'
     label: 'Operating System'
     type: string
     description: 'Server image that will be used'
     constraints:
       - description: 'supported os versions'
         allowed_values:
-          - 'Ubuntu 14.04 LTS (Trusty Tahr) (PV)'
+          - 'Ubuntu 14.04 LTS (Trusty Tahr) (PVHVM) (Orchestration)'
   flavor:
     default: '2GB Standard Instance'
     label: 'Server Size'
@@ -117,28 +117,25 @@ outputs:
     value: { get_attr: [cloud_server, accessIPv4] }
 
 resources:
-  wait_condition:
-    type: "OS::Heat::SwiftSignal"
-    properties:
-      handle: { get_resource: wait_handle }
-      count: 1
-      timeout: 1800
-
-  wait_handle:
-    type: "OS::Heat::SwiftSignalHandle"
-
-
   cloud_server:
-    type: 'Rackspace::Cloud::Server'
+    type: OS::Nova::Server
     depends_on: [ apache_auth_password ]
     properties:
       key_name: { get_resource: ssh_key }
       flavor: { get_param: flavor }
       name: { get_param: [host_name, value] }
       image: { get_param: image }
-      user_data_format: RAW
+      user_data_format: SOFTWARE_CONFIG
       config_drive: true
-      user_data:
+      software_config_transport: POLL_TEMP_URL
+      metadata:
+        rax-heat: { get_param: "OS::stack_id" }
+
+  grafana_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config:
         str_replace:
           template: |
             #!/bin/bash -x
@@ -307,8 +304,6 @@ resources:
             url=https://monitoring.api.rackspacecloud.com/v1.0
             EOL
             start graphite-api
-            wc_notify --data-binary '{"status": "SUCCESS"}'
-
           params:
             es_version: { get_param: es_version }
             gr_version: { get_param: gr_version }
@@ -317,13 +312,21 @@ resources:
             rax_tenant: { get_param: rax_tenant }
             rax_username: { get_param: rax_username }
             rax_apikey: { get_param: rax_apikey }
-            wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+
+  grafana_deploy:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: grafana_config }
+      server: { get_resource: cloud_server }
+
   ssh_key:
     type: 'OS::Nova::KeyPair'
     properties:
       name:
         get_param: 'OS::stack_id'
       save_private_key: true
+
   apache_auth_password:
     type: 'OS::Heat::RandomString'
     properties:
