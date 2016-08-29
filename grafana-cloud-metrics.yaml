@@ -304,6 +304,10 @@ resources:
             url=https://monitoring.api.rackspacecloud.com/v1.0
             EOL
             start graphite-api
+            ufw enable
+            ufw allow ssh
+            ufw allow http
+            ufw allow https
           params:
             es_version: { get_param: es_version }
             gr_version: { get_param: gr_version }
