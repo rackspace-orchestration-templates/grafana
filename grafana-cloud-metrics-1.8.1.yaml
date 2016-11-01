@@ -1,3 +1,4 @@
+
 # Usage:
 # heat -v stack-create $YOUR_STACK_NAME \
 # --template-file /path/to/grafana.template \
@@ -7,7 +8,7 @@
 # -P host_name=$WHAT_YOU_WANT_TO_CALL_IT
 #
 # What to expect:
-# A Cloud Server with a self-contained Grafana 3.1.1 installation that serves metrics
+# A Cloud Server with a self-contained Grafana installation that serves metrics
 # from the Rackspace Cloud Metrics API. A default dashboard will be configured
 # to serve metrics from the server you spin up.
 #
@@ -19,7 +20,7 @@
 heat_template_version: 2013-05-23
 
 description: >
-  Puts together a server that will run Grafana 3.1.1 using Cloud Metrics data.
+  Puts together a server that will run Grafana using Cloud Metrics data.
 
 parameter_groups:
   - label: 'Server Settings'
@@ -28,6 +29,7 @@ parameter_groups:
       - image
       - host_name
       - es_version
+      - gr_version
       - rax_tenant
       - rax_username
       - rax_apikey
@@ -78,6 +80,11 @@ parameters:
     type: string
     description: 'Elasticsearch version'
     label: 'Elasticsearch version'
+  gr_version:
+    default: '1.8.1'
+    type: string
+    description: 'Grafana version'
+    label: 'Grafana version'
   rax_tenant:
     default: 'notavalidtenantdkw93ddkwl'
     type: string
@@ -134,13 +141,11 @@ resources:
             #!/bin/bash -x
             exec 2>&1
             exec 1>/tmp/bash-debug.log
-
             ps auxwwef
             sleep 120
             echo after sleep
             ps auxwwef
             rm -f /var/lib/dpkg/lock
-
             export DEBIAN_FRONTEND=noninteractive
             echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections
             echo debconf shared/accepted-oracle-license-v1-1 seen true | debconf-set-selections
@@ -152,7 +157,6 @@ resources:
               echo installing "$i"
               apt-get install -y $i --force-yes 2>&1 | tee /tmp/$i.install.log
             done
-
             curl -o /tmp/elasticsearch-es_version.deb https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-es_version.deb
             dpkg -i /tmp/elasticsearch-es_version.deb
             update-rc.d elasticsearch defaults 95 10
@@ -160,17 +164,13 @@ resources:
             echo cluster.name: es_grafana > /etc/elasticsearch/elasticsearch.yml
             echo network.host: 127.0.0.1 >> /etc/elasticsearch/elasticsearch.yml
             /etc/init.d/elasticsearch start
-
-            wget https://grafanarel.s3.amazonaws.com/builds/grafana_3.1.1-1470047149_amd64.deb
-            apt-get install -y adduser libfontconfig
-            dpkg -i grafana_3.1.1-1470047149_amd64.deb
-            service grafana-server start
-            sleep 5
-            grafana-cli plugins install rackerlabs-blueflood-datasource
-            sed -i '/allow_sign_up = true/c\allow_sign_up = false' /usr/share/grafana/conf/defaults.ini
-            service grafana-server restart
-
+            htpasswd -b -c /etc/nginx/.htpasswd apache_auth_user apache_auth_password
+            curl -o /tmp/grafana-gr_version.tar.gz http://grafanarel.s3.amazonaws.com/grafana-gr_version.tar.gz
+            tar -xzf /tmp/grafana-gr_version.tar.gz -C /usr/share/nginx/
+            ln -s /usr/share/nginx/grafana-gr_version /usr/share/nginx/grafana
+            chown -R root:root /usr/share/nginx/grafana-gr_version
             rm /etc/nginx/sites-enabled/default
+
             export heat_one_parameter='$1'
             export heat_host_parameter='$host'
             cat > /etc/nginx/sites-available/grafana << EOL
@@ -182,6 +182,8 @@ resources:
             }
             server {
               listen 80;
+              auth_basic 'Restricted';
+              auth_basic_user_file /etc/nginx/.htpasswd;
               location /graphite/ {
                 rewrite /graphite/(.*) /$heat_one_parameter break;
                 proxy_pass http://graphite;
@@ -195,13 +197,10 @@ resources:
                 proxy_set_header Host $heat_host_parameter;
               }
               location / {
-                proxy_pass http://localhost:3000/;
-                proxy_redirect off;
-                proxy_set_header Host $heat_host_parameter;
+                root /usr/share/nginx/grafana;
               }
             }
             EOL
-
             ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
             /etc/init.d/nginx restart
             pip install gunicorn
@@ -243,7 +242,51 @@ resources:
                   format: '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
                   datefmt: '%Y-%m-%d %H:%M:%S'
             EOL
-
+            git -C /tmp clone https://github.com/rackerlabs/blueflood.git
+            git -C /tmp/blueflood checkout master
+            cd /usr/share/nginx/grafana/plugins
+            mkdir datasource
+            cp -r /tmp/blueflood/contrib/grafana/grafana_1.x/blueflood ./datasource
+            cat > /usr/share/nginx/grafana/config.js << EOL
+            define(['settings'],
+            function (Settings) {
+              return new Settings({
+                datasources: {
+                  graphite: {
+                    type: 'graphite',
+                    url: 'http://'+window.location.hostname+'/graphite',
+                  },
+                  elasticsearch: {
+                    type: 'elasticsearch',
+                    url: 'http://'+window.location.hostname+'/elasticsearch',
+                    index: 'grafana-dash',
+                    grafanaDB: true,
+                  },
+                  RackspaceMetrics: {
+                    type: 'BluefloodDatasource',
+                    url: 'http://iad.metrics.api.rackspacecloud.com',
+                    username: 'rax_username',
+                    apikey: 'rax_apikey',
+                    tenantID: 'rax_tenant',
+                    useGraphite: true
+                  }
+                },
+                search: {
+                  max_results: 20
+                },
+                default_route: '/dashboard/file/default.json',
+                unsaved_changes_warning: true,
+                playlist_timespan: '1m',
+                admin: {
+                  password: ''
+                },
+                plugins: {
+                  panels: [],
+                  dependencies: ['datasource/blueflood/datasource']
+                }
+              });
+            });
+            EOL
             echo rax_tenant > ~/tenant_id
             cat > /etc/init/graphite-api.conf << EOL
             description "Graphite-API server"
@@ -253,7 +296,6 @@ resources:
             respawn
             exec gunicorn -b 127.0.0.1:8888 --access-logfile /var/log/gunicorn-access.log --error-logfile /var/log/gunicorn-error.log -w 8 graphite_api.app:app
             EOL
-
             cat > /root/.raxrc << EOL
             [credentials]
             username=rax_username
@@ -261,28 +303,14 @@ resources:
             [api]
             url=https://monitoring.api.rackspacecloud.com/v1.0
             EOL
-
             start graphite-api
-            curl -i -H "Content-Type: application/json" -X POST 'http://admin:admin@localhost/api/datasources' -d \
-            '{
-              "name":"blueflood",
-              "type":"rackerlabs-blueflood-datasource",
-              "url":"http://localhost:8888",
-              "access":"proxy",
-              "basicAuth":false,
-              "withCredentials":false,
-              "isDefault":true
-            }'
-            curl -i -H "Content-Type: application/json" -X PUT 'http://admin:admin@localhost/api/users/1' -d '{ "login": "apache_auth_user" }'
-            curl -i -H "Content-Type: application/json" -X PUT 'http://apache_auth_user:admin@localhost/api/admin/users/1/password' -d '{ "password": "apache_auth_password" }'
-
             ufw enable
             ufw allow ssh
             ufw allow http
             ufw allow https
-
           params:
             es_version: { get_param: es_version }
+            gr_version: { get_param: gr_version }
             apache_auth_user: { get_param: apache_auth_user }
             apache_auth_password: { get_attr: [apache_auth_password, value ] }
             rax_tenant: { get_param: rax_tenant }
